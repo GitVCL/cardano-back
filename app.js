@@ -3,7 +3,11 @@ const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+
+// Libera apenas o domínio do seu front-end Vercel
+app.use(cors({
+  origin: 'https://cardano-tracker.vercel.app'
+}));
 
 app.get('/api/cardano', async (req, res) => {
   try {
@@ -23,7 +27,7 @@ app.get('/api/cardano', async (req, res) => {
   }
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001; // Isso é importante para a Render
 app.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
