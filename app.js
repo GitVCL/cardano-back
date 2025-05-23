@@ -1,46 +1,104 @@
-const express = require('express');
-const axios = require('axios');
-const cors = require('cors');
+import React, { useEffect, useState } from 'react';
+import './App.css';
 
-const app = express();
+function App() {
+  const [cardanoData, setCardanoData] = useState(null);
+  const [btcData, setBtcData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [nextUpdate, setNextUpdate] = useState(300);
 
-// Libera apenas o domínio do seu front-end Vercel
-app.use(cors({
-  origin: 'https://cardano-tracker.vercel.app'
-}));  
+  const fetchData = () => {
+    setLoading(true);
+    setError(null);
 
-app.get('/api/cardano', async (req, res) => {
-  try {
-    const response = await axios.get('https://api.coingecko.com/api/v3/coins/cardano');
-    const data = response.data;
+    // Dados da Cardano (CoinGecko via backend)
+    fetch("https://cardano-back.onrender.com/api/cardano")
+      .then(res => res.ok ? res.json() : Promise.reject("Erro API Cardano"))
+      .then(data => {
+        setCardanoData(data);
+        setNextUpdate(300);
+      })
+      .catch(err => {
+        console.error("Cardano:", err);
+        setError(prev => prev ? prev + " | Cardano" : "Erro ao atualizar Cardano (mantendo dados)");
+      })
+      .finally(() => setLoading(false));
 
-    const result = {
-      name: data.name,
-      price: data.market_data.current_price.usd,
-      change24h: data.market_data.price_change_percentage_24h,
-      marketCap: data.market_data.market_cap.usd,
-    };
+    // Dados do Bitcoin (Binance via backend)
+    fetch("https://cardano-back.onrender.com/api/binance/BTCUSDT")
+      .then(res => res.ok ? res.json() : Promise.reject("Erro API Binance"))
+      .then(data => setBtcData(data))
+      .catch(err => {
+        console.error("BTC:", err);
+        setError(prev => prev ? prev + " | BTC" : "Erro ao atualizar BTC (mantendo dados)");
+      });
+  };
 
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar dados da Cardano' });
-  }
-});
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 300000); // Atualiza a cada 5 minutos
+    return () => clearInterval(interval);
+  }, []);
 
-const PORT = process.env.PORT || 3001; // Isso é importante para a Render
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
+  useEffect(() => {
+    const countdown = setInterval(() => {
+      setNextUpdate(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(countdown);
+  }, []);
 
-app.get('/api/binance/:symbol', async (req, res) => {
-  const symbol = req.params.symbol.toUpperCase(); // exemplo: BTCUSDT
-  try {
-    const response = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
-    res.json({
-      symbol: response.data.symbol,
-      price: parseFloat(response.data.price)
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar preço da Binance' });
-  }
-});
+  return (
+    <div className="app">
+      <header className="header">
+        <h1>Cardano Tracker</h1>
+        <span className="next-update">Atualiza em: {nextUpdate}s</span>
+      </header>
+
+      {error && <div className="error">⚠️ {error}</div>}
+
+      <div className="table">
+        <div className="table-header">
+          <span>Asset</span>
+          <span>Preço</span>
+          <span>24h</span>
+          <span>Market Cap</span>
+        </div>
+
+        {cardanoData && (
+          <div className="table-row">
+            <div className="coin-info">
+              <img src="https://cryptologos.cc/logos/cardano-ada-logo.png" alt="ADA" className="coin-logo" />
+              <div>
+                <strong>Cardano</strong>
+                <span className="ticker">ADA</span>
+              </div>
+            </div>
+            <span>${cardanoData.price.toFixed(4)}</span>
+            <span className={cardanoData.change24h >= 0 ? 'green' : 'red'}>
+              {cardanoData.change24h.toFixed(2)}%
+            </span>
+            <span>${(cardanoData.marketCap / 1e9).toFixed(2)}B</span>
+          </div>
+        )}
+
+        {btcData && (
+          <div className="table-row">
+            <div className="coin-info">
+              <img src="https://cryptologos.cc/logos/bitcoin-btc-logo.png" alt="BTC" className="coin-logo" />
+              <div>
+                <strong>Bitcoin</strong>
+                <span className="ticker">BTC</span>
+              </div>
+            </div>
+            <span>${btcData.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+            <span>-</span>
+            <span>-</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default App;
