@@ -1,104 +1,61 @@
-import React, { useEffect, useState } from 'react';
-import './App.css';
+const express = require('express');
+const axios = require('axios');
+const app = express();
 
-function App() {
-  const [cardanoData, setCardanoData] = useState(null);
-  const [btcData, setBtcData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [nextUpdate, setNextUpdate] = useState(300);
+// Lista das 15 criptomoedas (ids da CoinGecko)
+const CRYPTOS = [
+  "bitcoin", "ethereum", "binancecoin", "solana", "ripple",
+  "cardano", "dogecoin", "avalanche-2", "polkadot", "shiba-inu",
+  "polygon", "chainlink", "tron", "litecoin", "bitcoin-cash"
+];
 
-  const fetchData = () => {
-    setLoading(true);
-    setError(null);
-
-    // Dados da Cardano (CoinGecko via backend)
-    fetch("https://cardano-back.onrender.com/api/cardano")
-      .then(res => res.ok ? res.json() : Promise.reject("Erro API Cardano"))
-      .then(data => {
-        setCardanoData(data);
-        setNextUpdate(300);
-      })
-      .catch(err => {
-        console.error("Cardano:", err);
-        setError(prev => prev ? prev + " | Cardano" : "Erro ao atualizar Cardano (mantendo dados)");
-      })
-      .finally(() => setLoading(false));
-
-    // Dados do Bitcoin (Binance via backend)
-    fetch("https://cardano-back.onrender.com/api/binance/BTCUSDT")
-      .then(res => res.ok ? res.json() : Promise.reject("Erro API Binance"))
-      .then(data => setBtcData(data))
-      .catch(err => {
-        console.error("BTC:", err);
-        setError(prev => prev ? prev + " | BTC" : "Erro ao atualizar BTC (mantendo dados)");
-      });
+// Mapeia os ids da CoinGecko para símbolos e nomes
+function mapIdToData(id) {
+  const map = {
+    bitcoin: { symbol: "BTCUSDT", name: "Bitcoin" },
+    ethereum: { symbol: "ETHUSDT", name: "Ethereum" },
+    binancecoin: { symbol: "BNBUSDT", name: "BNB" },
+    solana: { symbol: "SOLUSDT", name: "Solana" },
+    ripple: { symbol: "XRPUSDT", name: "XRP" },
+    cardano: { symbol: "ADAUSDT", name: "Cardano" },
+    dogecoin: { symbol: "DOGEUSDT", name: "Dogecoin" },
+    avalanche-2: { symbol: "AVAXUSDT", name: "Avalanche" },
+    polkadot: { symbol: "DOTUSDT", name: "Polkadot" },
+    shiba-inu: { symbol: "SHIBUSDT", name: "Shiba Inu" },
+    polygon: { symbol: "MATICUSDT", name: "Polygon" },
+    chainlink: { symbol: "LINKUSDT", name: "Chainlink" },
+    tron: { symbol: "TRXUSDT", name: "Tron" },
+    litecoin: { symbol: "LTCUSDT", name: "Litecoin" },
+    bitcoin-cash: { symbol: "BCHUSDT", name: "Bitcoin Cash" }
   };
-
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 300000); // Atualiza a cada 5 minutos
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const countdown = setInterval(() => {
-      setNextUpdate(prev => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(countdown);
-  }, []);
-
-  return (
-    <div className="app">
-      <header className="header">
-        <h1>Cardano Tracker</h1>
-        <span className="next-update">Atualiza em: {nextUpdate}s</span>
-      </header>
-
-      {error && <div className="error">⚠️ {error}</div>}
-
-      <div className="table">
-        <div className="table-header">
-          <span>Asset</span>
-          <span>Preço</span>
-          <span>24h</span>
-          <span>Market Cap</span>
-        </div>
-
-        {cardanoData && (
-          <div className="table-row">
-            <div className="coin-info">
-              <img src="https://cryptologos.cc/logos/cardano-ada-logo.png" alt="ADA" className="coin-logo" />
-              <div>
-                <strong>Cardano</strong>
-                <span className="ticker">ADA</span>
-              </div>
-            </div>
-            <span>${cardanoData.price.toFixed(4)}</span>
-            <span className={cardanoData.change24h >= 0 ? 'green' : 'red'}>
-              {cardanoData.change24h.toFixed(2)}%
-            </span>
-            <span>${(cardanoData.marketCap / 1e9).toFixed(2)}B</span>
-          </div>
-        )}
-
-        {btcData && (
-          <div className="table-row">
-            <div className="coin-info">
-              <img src="https://cryptologos.cc/logos/bitcoin-btc-logo.png" alt="BTC" className="coin-logo" />
-              <div>
-                <strong>Bitcoin</strong>
-                <span className="ticker">BTC</span>
-              </div>
-            </div>
-            <span>${btcData.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-            <span>-</span>
-            <span>-</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return map[id] || { symbol: id, name: id };
 }
 
-export default App;
+app.get('/api/cryptos', async (req, res) => {
+  try {
+    const ids = CRYPTOS.join(',');
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
+    const response = await axios.get(url);
+    const prices = response.data;
+
+    const result = Object.keys(prices).map(id => {
+      const { symbol, name } = mapIdToData(id);
+      return {
+        symbol,
+        name,
+        price: prices[id].usd
+      };
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error("Erro ao buscar dados da CoinGecko:", error.message);
+    res.status(500).json({ error: 'Erro ao buscar dados das criptomoedas' });
+  }
+});
+
+// Inicia o servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
