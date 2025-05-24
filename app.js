@@ -1,61 +1,71 @@
 const express = require('express');
-const axios = require('axios');
+const fetch = require('node-fetch');
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Lista das 15 criptomoedas (ids da CoinGecko)
-const CRYPTOS = [
-  "bitcoin", "ethereum", "binancecoin", "solana", "ripple",
-  "cardano", "dogecoin", "avalanche-2", "polkadot", "shiba-inu",
-  "polygon", "chainlink", "tron", "litecoin", "bitcoin-cash"
-];
-
-// Mapeia os ids da CoinGecko para símbolos e nomes
-function mapIdToData(id) {
-  const map = {
-    bitcoin: { symbol: "BTCUSDT", name: "Bitcoin" },
-    ethereum: { symbol: "ETHUSDT", name: "Ethereum" },
-    binancecoin: { symbol: "BNBUSDT", name: "BNB" },
-    solana: { symbol: "SOLUSDT", name: "Solana" },
-    ripple: { symbol: "XRPUSDT", name: "XRP" },
-    cardano: { symbol: "ADAUSDT", name: "Cardano" },
-    dogecoin: { symbol: "DOGEUSDT", name: "Dogecoin" },
-    avalanche-2: { symbol: "AVAXUSDT", name: "Avalanche" },
-    polkadot: { symbol: "DOTUSDT", name: "Polkadot" },
-    shiba-inu: { symbol: "SHIBUSDT", name: "Shiba Inu" },
-    polygon: { symbol: "MATICUSDT", name: "Polygon" },
-    chainlink: { symbol: "LINKUSDT", name: "Chainlink" },
-    tron: { symbol: "TRXUSDT", name: "Tron" },
-    litecoin: { symbol: "LTCUSDT", name: "Litecoin" },
-    bitcoin-cash: { symbol: "BCHUSDT", name: "Bitcoin Cash" }
-  };
-  return map[id] || { symbol: id, name: id };
-}
-
-app.get('/api/cryptos', async (req, res) => {
+// Rota Cardano (CoinGecko)
+app.get('/api/cardano', async (req, res) => {
   try {
-    const ids = CRYPTOS.join(',');
-    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
-    const response = await axios.get(url);
-    const prices = response.data;
+    const response = await fetch('https://api.coingecko.com/api/v3/coins/cardano?localization=false&tickers=false&community_data=false&developer_data=false&sparkline=false');
+    const data = await response.json();
 
-    const result = Object.keys(prices).map(id => {
-      const { symbol, name } = mapIdToData(id);
-      return {
-        symbol,
-        name,
-        price: prices[id].usd
-      };
-    });
+    const price = data.market_data.current_price.usd;
+    const change24h = data.market_data.price_change_percentage_24h;
+    const marketCap = data.market_data.market_cap.usd;
 
-    res.json(result);
+    res.json({ price, change24h, marketCap });
   } catch (error) {
-    console.error("Erro ao buscar dados da CoinGecko:", error.message);
-    res.status(500).json({ error: 'Erro ao buscar dados das criptomoedas' });
+    console.error("Erro Cardano:", error);
+    res.status(500).json({ error: 'Erro ao buscar dados do Cardano' });
   }
 });
 
-// Inicia o servidor
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+// Rota Criptos (Binance)
+app.get('/api/cryptos', async (req, res) => {
+  try {
+    const response = await fetch('https://api.binance.com/api/v3/ticker/price');
+    const data = await response.json();
+
+    const symbols = [
+      "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
+      "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "DOTUSDT", "SHIBUSDT",
+      "MATICUSDT", "LINKUSDT", "TRXUSDT", "LTCUSDT", "BCHUSDT"
+    ];
+
+    const filtered = data
+      .filter(coin => symbols.includes(coin.symbol))
+      .map(coin => ({
+        symbol: coin.symbol,
+        name: symbolToName(coin.symbol),
+        price: parseFloat(coin.price)
+      }));
+
+    res.json(filtered);
+  } catch (error) {
+    console.error("Erro Binance:", error);
+    res.status(500).json({ error: 'Erro ao buscar dados da Binance' });
+  }
 });
+
+function symbolToName(symbol) {
+  const names = {
+    BTCUSDT: "Bitcoin",
+    ETHUSDT: "Ethereum",
+    BNBUSDT: "BNB",
+    SOLUSDT: "Solana",
+    XRPUSDT: "XRP",
+    ADAUSDT: "Cardano",
+    DOGEUSDT: "Dogecoin",
+    AVAXUSDT: "Avalanche",
+    DOTUSDT: "Polkadot",
+    SHIBUSDT: "Shiba Inu",
+    MATICUSDT: "Polygon",
+    LINKUSDT: "Chainlink",
+    TRXUSDT: "TRON",
+    LTCUSDT: "Litecoin",
+    BCHUSDT: "Bitcoin Cash"
+  };
+  return names[symbol] || symbol;
+}
+
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
